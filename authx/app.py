@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import argparse
-import html
 import sqlite3
 import time
 import urllib.parse
 from pathlib import Path
 
 from flask import Flask, Response, current_app, g, redirect, request
+
+from .views import (
+    link_notice,
+    notice,
+    page_audit,
+    page_dashboard,
+    page_forgot,
+    page_login,
+    page_register,
+    page_reset,
+    page_tickets,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -147,122 +158,6 @@ def create_session(db: sqlite3.Connection, user_id: int, session_id: str) -> Non
     )
 
 
-def notice(message: str, kind: str = "notice") -> str:
-    return f'<div class="notice {kind}">{html.escape(message)}</div>'
-
-
-def link_notice(message: str, href: str, label: str) -> str:
-    return (
-        f'<div class="notice ok">{html.escape(message)} '
-        f'<a href="{html.escape(href, quote=True)}">{html.escape(label)}</a></div>'
-    )
-
-
-def render_layout(title: str, body: str) -> str:
-    user = current_user()
-    nav = (
-        f"""
-        <form action="/logout" method="post" class="nav-actions">
-            <span>{html.escape(user["email"])}</span>
-            <a href="/dashboard">Dashboard</a>
-            <a href="/tickets">Tickets</a>
-            <button type="submit">Logout</button>
-        </form>
-        """
-        if user
-        else """
-        <nav class="nav-actions">
-            <a href="/login">Login</a>
-            <a href="/register">Register</a>
-            <a href="/forgot">Forgot password</a>
-        </nav>
-        """
-    )
-    return f"""<!doctype html>
-<html lang="ro">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{html.escape(title)} - AuthX</title>
-  <style>
-    :root {{ --ink: #20242a; --muted: #626b77; --line: #d9dee7; --surface: #fff; --band: #f4f7fb; --accent: #0f766e; --danger: #b42318; font-family: Arial, Helvetica, sans-serif; }}
-    * {{ box-sizing: border-box; }}
-    body {{ margin: 0; color: var(--ink); background: var(--band); min-height: 100vh; }}
-    header {{ background: var(--surface); border-bottom: 1px solid var(--line); padding: 16px clamp(18px, 5vw, 56px); display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }}
-    main {{ width: min(1040px, calc(100vw - 32px)); margin: 28px auto; }}
-    h1 {{ margin: 0; font-size: 26px; }} h2 {{ margin: 0 0 16px; font-size: 22px; }} h3 {{ margin: 18px 0 10px; font-size: 18px; }}
-    p {{ color: var(--muted); line-height: 1.5; }} a {{ color: var(--accent); text-decoration: none; font-weight: 700; }}
-    label {{ display: block; font-weight: 700; margin: 14px 0 6px; }}
-    input, select, textarea {{ width: 100%; border: 1px solid #b9c1ce; border-radius: 6px; padding: 11px 12px; font: inherit; background: #fff; }}
-    textarea {{ min-height: 96px; resize: vertical; }}
-    button, .button {{ border: 0; border-radius: 6px; background: var(--accent); color: #fff; padding: 10px 14px; font: inherit; font-weight: 700; cursor: pointer; display: inline-block; }}
-    table {{ width: 100%; border-collapse: collapse; background: var(--surface); }}
-    th, td {{ border-bottom: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }}
-    code {{ background: #edf1f6; padding: 2px 5px; border-radius: 4px; }}
-    .brand {{ display: flex; align-items: baseline; gap: 12px; }}
-    .badge {{ border-radius: 999px; padding: 4px 9px; color: #fff; font-size: 12px; font-weight: 700; background: var(--danger); }}
-    .nav-actions {{ display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0; }}
-    .panel {{ background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: clamp(18px, 3vw, 28px); margin-bottom: 18px; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }}
-    .notice {{ border-left: 4px solid var(--accent); padding: 12px 14px; background: #eef8f6; margin-bottom: 16px; }}
-    .error {{ border-left-color: var(--danger); background: #fff1f0; color: #7a271a; }}
-    .ok {{ border-left-color: #146c43; background: #eef7f1; color: #14532d; }}
-    .muted {{ color: var(--muted); }}
-    @media (max-width: 680px) {{ header {{ align-items: flex-start; }} .nav-actions {{ width: 100%; }} button, .button {{ width: 100%; text-align: center; }} }}
-  </style>
-</head>
-<body>
-  <header><div class="brand"><h1>AuthX</h1><span class="badge">VULNERABLE</span></div>{nav}</header>
-  <main>{body}</main>
-</body>
-</html>"""
-
-
-def page_register(message: str = "") -> str:
-    return render_layout("Register", f"""
-    <section class="panel"><h2>Register</h2>{message}
-      <form action="/register" method="post">
-        <label for="email">Email</label><input id="email" name="email" type="email" required>
-        <label for="password">Password</label><input id="password" name="password" type="password" required>
-        <button type="submit">Create account</button>
-      </form>
-    </section>""")
-
-
-def page_login(message: str = "") -> str:
-    return render_layout("Login", f"""
-    <section class="panel"><h2>Login</h2>{message}
-      <form action="/login" method="post">
-        <label for="email">Email</label><input id="email" name="email" type="email" required>
-        <label for="password">Password</label><input id="password" name="password" type="password" required>
-        <button type="submit">Login</button>
-      </form>
-    </section>""")
-
-
-def page_forgot(message: str = "") -> str:
-    return render_layout("Forgot password", f"""
-    <section class="panel"><h2>Forgot password</h2>{message}
-      <form action="/forgot" method="post">
-        <label for="email">Email</label><input id="email" name="email" type="email" required>
-        <button type="submit">Generate reset link</button>
-      </form>
-    </section>""")
-
-
-def page_reset(token: str, message: str = "") -> str:
-    safe_token = html.escape(token, quote=True)
-    return render_layout("Reset password", f"""
-    <section class="panel"><h2>Reset password</h2>{message}
-      <form action="/reset" method="post">
-        <input name="token" type="hidden" value="{safe_token}">
-        <label for="token_display">Token</label><input id="token_display" value="{safe_token}" disabled>
-        <label for="password">New password</label><input id="password" name="password" type="password" required>
-        <button type="submit">Set new password</button>
-      </form>
-    </section>""")
-
-
 def create_app(db_path: Path) -> Flask:
     init_db(db_path)
     app = Flask(__name__)
@@ -281,12 +176,12 @@ def create_app(db_path: Path) -> Flask:
     @app.route("/register", methods=["GET", "POST"])
     def register() -> Response | str:
         if request.method == "GET":
-            return page_register()
+            return page_register(current_user())
         db = get_db()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         if not email or not password:
-            return page_register(notice("Email and password are required.", "error"))
+            return page_register(None, notice("Email and password are required.", "error"))
         try:
             cursor = db.execute(
                 "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, 'USER', ?)",
@@ -295,21 +190,21 @@ def create_app(db_path: Path) -> Flask:
             log_event(db, cursor.lastrowid, "REGISTER", "auth", str(cursor.lastrowid))
             db.commit()
         except sqlite3.IntegrityError:
-            return page_register(notice("Email already registered.", "error"))
+            return page_register(None, notice("Email already registered.", "error"))
         return redirect("/login", code=303)
 
     @app.route("/login", methods=["GET", "POST"])
     def login() -> Response | str:
         if request.method == "GET":
-            return page_login()
+            return page_login(current_user())
         db = get_db()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         user = db.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
         if user is None:
-            return page_login(notice("User not found.", "error"))
+            return page_login(None, notice("User not found.", "error"))
         if password != user["password_hash"]:
-            return page_login(notice("Wrong password.", "error"))
+            return page_login(None, notice("Wrong password.", "error"))
         session_id = f"session-{user['id']}"
         create_session(db, user["id"], session_id)
         log_event(db, user["id"], "LOGIN_SUCCESS", "auth", None)
@@ -334,12 +229,12 @@ def create_app(db_path: Path) -> Flask:
     @app.route("/forgot", methods=["GET", "POST"])
     def forgot() -> str:
         if request.method == "GET":
-            return page_forgot()
+            return page_forgot(current_user())
         db = get_db()
         email = request.form.get("email", "").strip().lower()
         user = db.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
         if user is None:
-            return page_forgot(notice("No account for this email.", "error"))
+            return page_forgot(None, notice("No account for this email.", "error"))
         token = f"reset-{user['id']}"
         db.execute(
             "INSERT INTO password_reset_tokens (user_id, token, token_hash, expires_at, used, created_at) VALUES (?, ?, NULL, NULL, 0, ?)",
@@ -348,22 +243,22 @@ def create_app(db_path: Path) -> Flask:
         log_event(db, user["id"], "PASSWORD_RESET_REQUEST", "auth", None)
         db.commit()
         href = f"/reset?token={urllib.parse.quote(token)}"
-        return page_forgot(link_notice("Lab reset link:", href, href))
+        return page_forgot(None, link_notice("Lab reset link:", href, href))
 
     @app.route("/reset", methods=["GET", "POST"])
     def reset() -> str:
         if request.method == "GET":
-            return page_reset(request.args.get("token", ""))
+            return page_reset(current_user(), request.args.get("token", ""))
         db = get_db()
         token = request.form.get("token", "")
         new_password = request.form.get("password", "")
         user = user_from_reset_token(db, token)
         if user is None:
-            return page_reset(token, notice("Invalid reset token.", "error"))
+            return page_reset(None, token, notice("Invalid reset token.", "error"))
         db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_password, user["id"]))
         log_event(db, user["id"], "PASSWORD_RESET", "auth", None)
         db.commit()
-        return page_login(notice("Password changed. You can log in now.", "ok"))
+        return page_login(None, notice("Password changed. You can log in now.", "ok"))
 
     @app.get("/dashboard")
     def dashboard() -> Response | str:
@@ -372,14 +267,7 @@ def create_app(db_path: Path) -> Flask:
             return redirect("/login", code=303)
         db = get_db()
         active_sessions = db.execute("SELECT COUNT(*) AS count FROM sessions WHERE user_id = ? AND valid = 1", (user["id"],)).fetchone()["count"]
-        return render_layout("Dashboard", f"""
-        <section class="panel">
-          <h2>Dashboard</h2>
-          <p>Logged in as <strong>{html.escape(user["email"])}</strong> with role <code>{html.escape(user["role"])}</code>.</p>
-          <p>Active sessions: <strong>{active_sessions}</strong></p>
-          <div class="grid"><a class="button" href="/tickets">Open tickets</a><a class="button" href="/audit">View audit log</a></div>
-        </section>
-        <section class="panel"><h3>Mode behavior</h3><p>This version is intentionally vulnerable.</p></section>""")
+        return page_dashboard(user, active_sessions)
 
     @app.route("/tickets", methods=["GET", "POST"])
     def tickets() -> Response | str:
@@ -400,20 +288,7 @@ def create_app(db_path: Path) -> Flask:
                 db.commit()
                 return redirect("/tickets", code=303)
         rows = db.execute("SELECT * FROM tickets WHERE owner_id = ? ORDER BY id DESC", (user["id"],)).fetchall()
-        table_rows = "".join(
-            f"<tr><td>{row['id']}</td><td>{html.escape(row['title'])}</td><td>{html.escape(row['severity'])}</td><td>{html.escape(row['status'])}</td><td>{html.escape(row['description'])}</td></tr>"
-            for row in rows
-        )
-        return render_layout("Tickets", f"""
-        <section class="panel"><h2>Tickets</h2>
-          <form action="/tickets" method="post">
-            <label for="title">Title</label><input id="title" name="title" maxlength="120" required>
-            <label for="severity">Severity</label><select id="severity" name="severity"><option>LOW</option><option>MED</option><option>HIGH</option></select>
-            <label for="description">Description</label><textarea id="description" name="description" maxlength="1000" required></textarea>
-            <button type="submit">Create ticket</button>
-          </form>
-        </section>
-        <section class="panel"><h2>Your tickets</h2><table><thead><tr><th>ID</th><th>Title</th><th>Severity</th><th>Status</th><th>Description</th></tr></thead><tbody>{table_rows or '<tr><td colspan="5" class="muted">No tickets yet.</td></tr>'}</tbody></table></section>""")
+        return page_tickets(user, rows)
 
     @app.get("/audit")
     def audit() -> Response | str:
@@ -422,12 +297,7 @@ def create_app(db_path: Path) -> Flask:
             return redirect("/login", code=303)
         db = get_db()
         rows = db.execute("SELECT * FROM audit_logs WHERE user_id = ? OR user_id IS NULL ORDER BY id DESC LIMIT 30", (user["id"],)).fetchall()
-        table_rows = "".join(
-            f"<tr><td>{row['timestamp']}</td><td>{html.escape(row['action'])}</td><td>{html.escape(row['resource'])}</td><td>{html.escape(row['resource_id'] or '')}</td><td>{html.escape(row['ip_address'])}</td></tr>"
-            for row in rows
-        )
-        return render_layout("Audit log", f"""
-        <section class="panel"><h2>Audit log</h2><table><thead><tr><th>Time</th><th>Action</th><th>Resource</th><th>Resource ID</th><th>IP</th></tr></thead><tbody>{table_rows or '<tr><td colspan="5" class="muted">No events yet.</td></tr>'}</tbody></table></section>""")
+        return page_audit(user, rows)
 
     return app
 
